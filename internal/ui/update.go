@@ -30,16 +30,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				m.textInput.Blur()
 			}
-
+		case "shift+tab":
+			m.focus = (((m.focus-1)%4 + 4) % 4)
+			if m.focus == focusSearch {
+				m.textInput.Focus()
+			} else {
+				m.textInput.Blur()
+			}
 		case "enter":
 			if m.focus == focusSearch {
-				// Trigger Search
 				query := m.textInput.Value()
 				if query != "" {
 					m.loading = true
 					m.focus = focusMain
+					m.viewMode = viewList
 					m.textInput.Blur()
-					return m, searchSongsCmd(query)
+					m.songs = nil
+					m.albums = nil
+					m.artists = nil
+
+					// PASS THE FILTER MODE HERE
+					return m, searchCmd(query, m.filterMode)
 				}
 			} else if m.focus == focusMain {
 				if m.viewMode == viewList {
@@ -84,7 +95,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.focus == focusSidebar && m.cursorSide < len(m.playlists)-1 {
 				m.cursorSide++
 			}
-
+		case "ctrl+n":
+			// Switch filter
+			if m.focus == focusSearch {
+				m.filterMode = (m.filterMode + 1) % 3
+			}
+		case "ctrl+b":
+			// Switch filter
+			if m.focus == focusSearch {
+				m.filterMode = ((m.filterMode-1)%3 + 3) % 3 // Handle going negative
+			}
 		case "Q":
 			if m.focus != focusSearch {
 
@@ -165,15 +185,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	case songsResultMsg:
-		m.loading = false
-		m.songs = msg.songs
-		m.cursorMain = 0
-		m.mainOffset = 0
-		m.focus = focusMain
-		m.viewMode = viewList
-		m.textInput.Blur()
-
 	case playlistResultMsg:
 		m.playlists = msg.playlists
 
@@ -194,6 +205,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return m, syncPlayerCmd()
+
+	case songsResultMsg:
+		m.loading = false
+		m.songs = msg.songs
+		m.albums = nil
+		m.artists = nil
+		m.cursorMain = 0
+		m.mainOffset = 0
+		m.focus = focusMain
+
+	case albumsResultMsg:
+		m.loading = false
+		m.albums = msg.albums
+		m.songs = nil
+		m.artists = nil
+		m.cursorMain = 0
+		m.mainOffset = 0
+		m.focus = focusMain
+
+	case artistsResultMsg:
+		m.loading = false
+		m.artists = msg.artists
+		m.songs = nil
+		m.albums = nil
+		m.cursorMain = 0
+		m.mainOffset = 0
+		m.focus = focusMain
 	}
 
 	// Update inputs

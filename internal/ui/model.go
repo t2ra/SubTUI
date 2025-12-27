@@ -20,6 +20,12 @@ const (
 	viewQueue
 )
 
+const (
+	filterSongs = iota
+	filterAlbums
+	filterArtist
+)
+
 var (
 	// Colors
 	subtle    = lipgloss.AdaptiveColor{Light: "#D9DCCF", Dark: "#383838"}
@@ -38,10 +44,11 @@ var (
 )
 
 // --- MODEL ---
-
 type model struct {
 	textInput    textinput.Model
 	songs        []api.Song
+	albums       []api.Album
+	artists      []api.Artist
 	playlists    []api.Playlist
 	playerStatus player.PlayerStatus
 
@@ -56,7 +63,8 @@ type model struct {
 	height int
 
 	// View Mode
-	viewMode int
+	viewMode   int
+	filterMode int
 
 	// App State
 	err            error
@@ -70,6 +78,14 @@ type model struct {
 
 type songsResultMsg struct {
 	songs []api.Song
+}
+
+type albumsResultMsg struct {
+	albums []api.Album
+}
+
+type artistsResultMsg struct {
+	artists []api.Artist
 }
 
 type playlistResultMsg struct {
@@ -96,6 +112,7 @@ func InitialModel() model {
 		cursorMain: 0,
 		cursorSide: 0,
 		viewMode:   viewList,
+		filterMode: filterSongs,
 	}
 }
 

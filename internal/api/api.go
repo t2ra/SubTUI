@@ -42,7 +42,7 @@ type Artist struct {
 
 type Album struct {
 	ID     string `json:"id"`
-	Title  string `json:"title"`
+	Name   string `json:"name"`
 	Artist string `json:"artist"`
 }
 

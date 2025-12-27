@@ -17,20 +17,107 @@ func (m model) View() string {
 	sidebarWidth := int(float64(m.width) * 0.25)
 	mainWidth := m.width - sidebarWidth - 4
 
-	// SEARCH BAR
-	searchBorder := borderStyle
+	// HEADER
+	headerBorder := borderStyle
 	if m.focus == focusSearch {
-		searchBorder = activeBorderStyle
+		headerBorder = activeBorderStyle
 	}
 
-	searchView := searchBorder.Width(m.width - 2).Height(searchHeight).Render("Search: " + m.textInput.View())
+	topView := headerBorder.
+		Width(m.width - 2).
+		Height(searchHeight).
+		Render(headerContent(m))
 
-	// SIZE BAR
+	// SIDEBAR
 	sideBorder := borderStyle
 	if m.focus == focusSidebar {
 		sideBorder = activeBorderStyle
 	}
 
+	leftPane := sideBorder.
+		Width(sidebarWidth).
+		Height(mainHeight).
+		Render(sidebarContent(m, mainHeight))
+
+	// MAIN VIEW
+	mainBorder := borderStyle
+	if m.focus == focusMain {
+		mainBorder = activeBorderStyle
+	}
+
+	mainContent := ""
+	if m.loading {
+		mainContent = "\n  Searching your library..."
+	} else if m.filterMode == filterSongs {
+		mainContent = mainSongsContent(m, mainWidth, mainHeight)
+	} else if m.filterMode == filterAlbums {
+		mainContent = mainAlbumsContent(m, mainWidth, mainHeight)
+	} else if m.filterMode == filterArtist {
+		mainContent = mainArtistContent(m, mainWidth, mainHeight)
+	}
+
+	rightPane := mainBorder.
+		Width(mainWidth).
+		Height(mainHeight).
+		Render(mainContent)
+
+	// Join sidebar and main view
+	centerView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
+
+	// FOOTER
+	footerBorder := borderStyle
+	if m.focus == focusSong {
+		footerBorder = activeBorderStyle
+	}
+
+	footerView := footerBorder.
+		Width(m.width - 2).
+		Height(footerHeight).
+		Render(footerContent(m))
+
+	// COMBINE ALL VERTICALLY
+	return lipgloss.JoinVertical(lipgloss.Left,
+		topView,
+		centerView,
+		footerView,
+	)
+}
+
+func truncate(s string, w int) string {
+	if w <= 1 {
+		return ""
+	}
+	if len(s) > w {
+		return s[:w-1] + "…"
+	}
+	return s
+}
+
+func headerContent(m model) string {
+
+	leftContent := "Search: " + m.textInput.View()
+	rightContent := ""
+
+	switch m.filterMode {
+	case filterSongs:
+		rightContent = "< Songs >"
+	case filterAlbums:
+		rightContent = "< Albums >"
+	case filterArtist:
+		rightContent = "< Artist >"
+	}
+
+	innerWidth := m.width - 5
+	gapWidth := innerWidth - lipgloss.Width(leftContent) - lipgloss.Width(rightContent)
+	if gapWidth < 0 {
+		gapWidth = 0
+	}
+
+	gap := strings.Repeat(" ", gapWidth)
+	return leftContent + gap + rightContent
+}
+
+func sidebarContent(m model, mainHeight int) string {
 	sidebarContent := lipgloss.NewStyle().Bold(true).Render("  PLAYLISTS") + "\n\n"
 
 	for i, item := range m.playlists {
@@ -53,132 +140,210 @@ func (m model) View() string {
 		sidebarContent += style.Render(line) + "\n"
 	}
 
-	leftPane := sideBorder.
-		Width(sidebarWidth).
-		Height(mainHeight).
-		Render(sidebarContent)
+	return sidebarContent
+}
 
-	// MAIN VIEW
-	mainBorder := borderStyle
-	if m.focus == focusMain {
-		mainBorder = activeBorderStyle
-	}
-
+func mainSongsContent(m model, mainWidth int, mainHeight int) string {
 	mainContent := ""
-
+	mainTableHeader := ""
 	var targetList []api.Song
-	headerTitle := "TITLE"
 
-	if m.viewMode == viewQueue {
-		targetList = m.queue
-		headerTitle = fmt.Sprintf("QUEUE (%d/%d)", m.queueIndex+1, len(m.queue))
-	} else {
+	if m.viewMode == viewList {
+		mainTableHeader = "TITLE"
 		targetList = m.songs
+		mainContent = "\n  Use the search bar to find Songs."
+	} else {
+		mainTableHeader = fmt.Sprintf("QUEUE (%d/%d)", m.queueIndex+1, len(m.queue))
+		targetList = m.queue
+		mainContent = "\n  Queue is empty."
 	}
 
-	if m.loading {
-		mainContent = "\n  Searching your library..."
-	} else if len(targetList) == 0 {
-		if m.viewMode == viewList {
-			mainContent = "\n  Use the search bar to find music."
+	if len(targetList) == 0 {
+		return mainContent
+	}
 
-		} else if m.viewMode == viewQueue {
-			mainContent = "\n  Queue is empty."
+	availableWidth := mainWidth - 4
+	colTitle := int(float64(availableWidth) * 0.40)
+	colArtist := int(float64(availableWidth) * 0.15)
+	colAlbum := int(float64(availableWidth) * 0.25)
+	// Time takes whatever is left
+
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(subtle)
+	header := fmt.Sprintf("  %-*s %-*s %-*s %s",
+		colTitle, mainTableHeader,
+		colArtist, "ARTIST",
+		colAlbum, "ALBUM",
+		"TIME")
+
+	mainContent = headerStyle.Render(header) + "\n"
+	mainContent += lipgloss.NewStyle().Foreground(subtle).Render("  "+strings.Repeat("-", mainWidth-4)) + "\n"
+
+	headerHeight := 4
+	visibleRows := mainHeight - headerHeight
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	start := m.mainOffset
+	end := start + visibleRows
+	if end >= len(targetList) {
+		end = len(targetList)
+	}
+
+	for i := start; i <= end; i++ {
+		if i >= len(targetList) {
+			break
 		}
 
-	} else {
-		availableWidth := mainWidth - 4
-		colTitle := int(float64(availableWidth) * 0.40)
-		colArtist := int(float64(availableWidth) * 0.15)
-		colAlbum := int(float64(availableWidth) * 0.25)
-		// Time takes whatever is left
+		song := targetList[i]
 
-		headerStyle := lipgloss.NewStyle().Bold(true).Foreground(subtle)
-		header := fmt.Sprintf("  %-*s %-*s %-*s %s",
-			colTitle, headerTitle,
-			colArtist, "ARTIST",
-			colAlbum, "ALBUM",
-			"TIME")
+		cursor := "  "
+		style := lipgloss.NewStyle()
 
-		mainContent += headerStyle.Render(header) + "\n"
-		mainContent += lipgloss.NewStyle().Foreground(subtle).Render("  "+strings.Repeat("-", mainWidth-4)) + "\n"
-
-		headerHeight := 4
-		visibleRows := mainHeight - headerHeight
-		if visibleRows < 1 {
-			visibleRows = 1
-		}
-
-		start := m.mainOffset
-
-		end := start + visibleRows
-		if end >= len(targetList) {
-			end = len(targetList)
-		}
-
-		for i := start; i <= end; i++ {
-			if i >= len(targetList) {
-				break
+		if m.cursorMain == i {
+			cursor = "> "
+			if m.focus == focusMain {
+				style = style.Foreground(highlight).Bold(true)
+			} else {
+				style = style.Foreground(subtle)
 			}
+		}
 
-			song := targetList[i]
-
-			cursor := "  "
-			style := lipgloss.NewStyle()
-
+		if m.viewMode == viewQueue && i == m.queueIndex {
+			style = style.Foreground(special)
 			if m.cursorMain == i {
 				cursor = "> "
-				if m.focus == focusMain {
-					style = style.Foreground(highlight).Bold(true)
-				} else {
-					style = style.Foreground(subtle)
-				}
+			} else {
+				cursor = "  "
 			}
-
-			if m.viewMode == viewQueue && i == m.queueIndex {
-				style = style.Foreground(special)
-				if m.cursorMain == i {
-					cursor = "> "
-				} else {
-					cursor = "  "
-				}
-			}
-
-			trunc := func(s string, w int) string {
-				if w <= 1 {
-					return ""
-				}
-				if len(s) > w {
-					return s[:w-1] + "…"
-				}
-				return s
-			}
-
-			row := fmt.Sprintf("%-*s %-*s %-*s %s",
-				colTitle, trunc(song.Title, colTitle),
-				colArtist, trunc(song.Artist, colArtist),
-				colAlbum, trunc(song.Album, colAlbum),
-				formatDuration(song.Duration),
-			)
-
-			mainContent += fmt.Sprintf("%s%s\n", cursor, style.Render(row))
 		}
+
+		row := fmt.Sprintf("%-*s %-*s %-*s %s",
+			colTitle, truncate(song.Title, colTitle),
+			colArtist, truncate(song.Artist, colArtist),
+			colAlbum, truncate(song.Album, colAlbum),
+			formatDuration(song.Duration),
+		)
+
+		mainContent += fmt.Sprintf("%s%s\n", cursor, style.Render(row))
 	}
 
-	rightPane := mainBorder.
-		Width(mainWidth).
-		Height(mainHeight).
-		Render(mainContent)
+	return mainContent
+}
 
-	// Join sidebar and main view
-	centerView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
-
-	songBorder := borderStyle
-	if m.focus == focusSong {
-		songBorder = activeBorderStyle
+func mainAlbumsContent(m model, mainWidth int, mainHeight int) string {
+	if len(m.albums) == 0 {
+		return "\n  Use the search bar to find Albums."
 	}
 
-	// FOOTER
+	availableWidth := mainWidth - 4
+	colAlbum := int(float64(availableWidth) * 0.5)
+	colArtist := int(float64(availableWidth) * 0.5)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(subtle)
+	header := fmt.Sprintf("  %-*s %-*s",
+		colAlbum, "ALBUM",
+		colArtist, "ARTIST",
+	)
+
+	mainContent := headerStyle.Render(header) + "\n"
+	mainContent += lipgloss.NewStyle().Foreground(subtle).Render("  "+strings.Repeat("-", mainWidth-4)) + "\n"
+
+	headerHeight := 4
+	visibleRows := mainHeight - headerHeight
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	start := m.mainOffset
+	end := start + visibleRows
+	if end >= len(m.albums) {
+		end = len(m.albums)
+	}
+
+	for i := start; i <= end; i++ {
+		if i >= len(m.albums) {
+			break
+		}
+
+		album := m.albums[i]
+
+		cursor := "  "
+		style := lipgloss.NewStyle()
+
+		if m.cursorMain == i {
+			cursor = "> "
+			if m.focus == focusMain {
+				style = style.Foreground(highlight).Bold(true)
+			} else {
+				style = style.Foreground(subtle)
+			}
+		}
+
+		row := fmt.Sprintf("%-*s %-*s",
+			colAlbum, truncate(album.Name, colAlbum),
+			colArtist, truncate(album.Artist, colArtist),
+		)
+
+		mainContent += fmt.Sprintf("%s%s\n", cursor, style.Render(row))
+	}
+
+	return mainContent
+}
+
+func mainArtistContent(m model, mainWidth int, mainHeight int) string {
+	if len(m.artists) == 0 {
+		return "\n  Use the search bar to find Artists."
+	}
+
+	colArtist := mainWidth - 4
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(subtle)
+	header := fmt.Sprintf("  %-*s", colArtist, "ARTIST")
+
+	mainContent := headerStyle.Render(header) + "\n"
+	mainContent += lipgloss.NewStyle().Foreground(subtle).Render("  "+strings.Repeat("-", mainWidth-4)) + "\n"
+
+	headerHeight := 4
+	visibleRows := mainHeight - headerHeight
+	if visibleRows < 1 {
+		visibleRows = 1
+	}
+
+	start := m.mainOffset
+	end := start + visibleRows
+	if end >= len(m.artists) {
+		end = len(m.artists)
+	}
+
+	for i := start; i <= end; i++ {
+		if i >= len(m.artists) {
+			break
+		}
+
+		artist := m.artists[i]
+
+		cursor := "  "
+		style := lipgloss.NewStyle()
+
+		if m.cursorMain == i {
+			cursor = "> "
+			if m.focus == focusMain {
+				style = style.Foreground(highlight).Bold(true)
+			} else {
+				style = style.Foreground(subtle)
+			}
+		}
+
+		row := fmt.Sprintf("%-*s",
+			colArtist, truncate(artist.Name, colArtist),
+		)
+
+		mainContent += fmt.Sprintf("%s%s\n", cursor, style.Render(row))
+	}
+
+	return mainContent
+}
+
+func footerContent(m model) string {
 	title := ""
 	artist := ""
 
@@ -223,17 +388,5 @@ func (m model) View() string {
 		durStr,
 	)
 
-	footerContent := fmt.Sprintf("%s\n%s\n\n%s", rowTitle, rowArtist, rowProgress)
-
-	footerView := songBorder.
-		Width(m.width - 2).
-		Height(footerHeight).
-		Render(footerContent)
-
-	// COMBINE ALL VERTICALLY
-	return lipgloss.JoinVertical(lipgloss.Left,
-		searchView,
-		centerView,
-		footerView,
-	)
+	return fmt.Sprintf("%s\n%s\n\n%s", rowTitle, rowArtist, rowProgress)
 }
