@@ -14,6 +14,7 @@ const (
 	focusSearch = iota
 	focusSidebar
 	focusMain
+	focusSong
 )
 
 var (
@@ -94,12 +95,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Key Presses
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c", "q":
 			return m, tea.Quit
 
-		// Tab Cycles Focus: Search -> Sidebar -> Main -> Search
+		// Tab Cycles Focus: Search -> Sidebar -> Main -> Song -> Search
 		case "tab":
-			m.focus = (m.focus + 1) % 3
+			m.focus = (m.focus + 1) % 4
 			if m.focus == focusSearch {
 				m.textInput.Focus()
 			} else {
@@ -128,7 +129,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = focusMain
 				return m, getPlaylistSongs((m.playlists[m.cursorSide]).ID)
 			}
-
 		case "up", "k": // Navigation up
 			if m.focus == focusMain && m.cursorMain > 0 {
 				m.cursorMain--
@@ -150,6 +150,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.focus == focusSidebar && m.cursorSide < len(m.playlists)-1 {
 				m.cursorSide++
+			}
+		case "p": // Play/pause
+			if m.focus != focusSearch {
+				togglePause()
 			}
 		}
 
@@ -320,6 +324,11 @@ func (m model) View() string {
 	// Join sidebar and main view
 	centerView := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, rightPane)
 
+	songBorder := borderStyle
+	if m.focus == focusSong {
+		songBorder = activeBorderStyle
+	}
+
 	// FOOTER
 	title := ""
 	artist := ""
@@ -367,7 +376,7 @@ func (m model) View() string {
 
 	footerContent := fmt.Sprintf("%s\n%s\n\n%s", rowTitle, rowArtist, rowProgress)
 
-	footerView := borderStyle.
+	footerView := songBorder.
 		Width(m.width - 2).
 		Height(footerHeight).
 		Render(footerContent)

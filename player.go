@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
-	"strconv"
 	"time"
 
-	"github.com/blang/mpv"
+	"github.com/gdrens/mpv"
 )
 
 var (
@@ -21,14 +21,19 @@ type PlayerStatus struct {
 	Current  float64
 	Duration float64
 	Paused   bool
+	Volume   float64
 }
 
 func initPlayer() error {
 	socketPath := "/tmp/depthtui_mpv_socket"
 
+	exec.Command("pkill", "-f", socketPath).Run()
+	time.Sleep(200 * time.Millisecond)
+
 	args := []string{
 		"--idle",
 		"--no-video",
+		"--ao=pulse",
 		"--input-ipc-server=" + socketPath,
 	}
 
@@ -37,27 +42,17 @@ func initPlayer() error {
 		return fmt.Errorf("failed to start mpv: %v", err)
 	}
 
-	time.Sleep(500 * time.Millisecond)
+	maxRetries := 10
+	for i := 0; i < maxRetries; i++ {
+		if _, err := os.Stat(socketPath); err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 
-	client := mpv.NewClient(mpv.NewIPCClient(socketPath))
+	ipcc := mpv.NewIPCClient(socketPath)
+	client := mpv.NewClient(ipcc)
 	mpvClient = client
-
-	return nil
-}
-
-func playSong(songID string) error {
-	if mpvClient == nil {
-		return fmt.Errorf("player not initialized")
-	}
-
-	url := subsonicStream(songID)
-	if err := mpvClient.Loadfile(url, mpv.LoadFileModeReplace); err != nil {
-		return err
-	}
-
-	subsonicScrobble(songID)
-
-	mpvClient.SetProperty("pause", false)
 
 	return nil
 }
@@ -68,52 +63,71 @@ func shutdownPlayer() {
 	}
 }
 
+func playSong(songID string) error {
+	if mpvClient == nil {
+		return fmt.Errorf("player not initialized")
+	}
+
+	url := subsonicStream(songID)
+	if err := mpvClient.LoadFile(url, mpv.LoadFileModeReplace); err != nil {
+		return err
+	}
+
+	subsonicScrobble(songID)
+
+	mpvClient.SetProperty("pause", false)
+
+	return nil
+}
+
+func togglePause() {
+	if mpvClient == nil {
+		return
+	}
+
+	status := mpvClient.IsPause()
+	mpvClient.SetProperty("pause", !status)
+}
+
+func toggleLoop() {
+	if mpvClient == nil {
+		return
+	}
+
+	status := mpvClient.IsPlayLoop()
+	mpvClient.SetProperty("loop", !status)
+}
+
+func toggleShuffle() {
+	if mpvClient == nil {
+		return
+	}
+
+	status := mpvClient.IsShuffle()
+	mpvClient.SetProperty("shuffle", !status)
+}
+
 func getPlayerStatus() PlayerStatus {
 	if mpvClient == nil {
 		return PlayerStatus{}
 	}
 
-	getStr := func(prop string) string {
-		val, err := mpvClient.GetProperty(prop)
-		if err != nil {
-			return ""
-		}
+	title := mpvClient.GetProperty("media-title")
+	artist := mpvClient.GetProperty("metadata/by-key/artist")
+	album := mpvClient.GetProperty("metadata/by-key/album")
 
-		s := fmt.Sprintf("%v", val)
-
-		if s == "<nil>" || s == "nil" || s == "" {
-			return ""
-		}
-		return s
-	}
-
-	getFloat := func(prop string) float64 {
-		val, err := mpvClient.GetProperty(prop)
-		if err != nil {
-			return 0.0
-		}
-
-		s := fmt.Sprintf("%v", val)
-
-		if s == "<nil>" || s == "nil" {
-			return 0.0
-		}
-
-		f, _ := strconv.ParseFloat(s, 64)
-		return f
-	}
-
-	pausedVal, _ := mpvClient.GetProperty("pause")
-	pausedStr := fmt.Sprintf("%v", pausedVal)
-	isPaused := (pausedStr == "yes" || pausedStr == "true")
+	pos := mpvClient.Position()
+	dur := mpvClient.Duration()
+	paused := mpvClient.IsPause()
+	vol, _ := mpvClient.GetFloatProperty("volume")
 
 	return PlayerStatus{
-		Title:    getStr("media-title"),
-		Artist:   getStr("metadata/by-key/artist"),
-		Album:    getStr("metadata/by-key/album"),
-		Current:  getFloat("time-pos"),
-		Duration: getFloat("duration"),
-		Paused:   isPaused,
+		Title:    fmt.Sprintf("%v", title),
+		Artist:   fmt.Sprintf("%v", artist),
+		Album:    fmt.Sprintf("%v", album),
+		Current:  pos,
+		Duration: dur,
+		Paused:   paused,
+		Volume:   vol,
 	}
-
 }
