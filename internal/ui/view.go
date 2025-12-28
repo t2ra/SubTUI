@@ -49,7 +49,7 @@ func (m model) View() string {
 	leftPane := sideBorder.
 		Width(sidebarWidth).
 		Height(mainHeight).
-		Render(sidebarContent(m, mainHeight))
+		Render(sidebarContent(m, mainHeight, sidebarWidth))
 
 	// MAIN VIEW
 	mainBorder := borderStyle
@@ -153,7 +153,7 @@ func headerContent(m model) string {
 	return leftContent + gap + rightContent
 }
 
-func sidebarContent(m model, mainHeight int) string {
+func sidebarContent(m model, mainHeight int, sidebarWidth int) string {
 	sidebarContent := lipgloss.NewStyle().Bold(true).Render("  PLAYLISTS") + "\n\n"
 
 	for i, item := range m.playlists {
@@ -172,7 +172,7 @@ func sidebarContent(m model, mainHeight int) string {
 			style = style.Foreground(highlight).Bold(true)
 		}
 
-		line := cursor + item.Name
+		line := cursor + truncate(item.Name, sidebarWidth-4)
 		sidebarContent += style.Render(line) + "\n"
 	}
 
