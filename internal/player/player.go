@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/MattiaPun/SubTUI/internal/api"
@@ -26,7 +27,7 @@ type PlayerStatus struct {
 }
 
 func InitPlayer() error {
-	socketPath := "/tmp/subtui_mpv_socket"
+	socketPath := filepath.Join(os.TempDir(), fmt.Sprintf("subtui_mpv_socket_%d", os.Getuid()))
 
 	_ = exec.Command("pkill", "-f", socketPath).Run()
 	time.Sleep(200 * time.Millisecond)
@@ -34,7 +35,6 @@ func InitPlayer() error {
 	args := []string{
 		"--idle",
 		"--no-video",
-		"--ao=pulse",
 		"--input-ipc-server=" + socketPath,
 	}
 
