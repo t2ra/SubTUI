@@ -52,6 +52,10 @@ go build .
 |--------------	|-----------------------------	|
 | `j` / `Down` 	| Move selection down         	|
 | `k` / `Up`   	| Move selection up           	|
+| `G`           | Move selection to bottom    	|
+| `gg`          | Move selection to top        	|
+| `ga`          | Go to album of selection   	|
+| `gr`          | Go to artist of selection 	|
 | `Enter`      	| Play selection / Open Album 	|
 
 ### Media Controls
