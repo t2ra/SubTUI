@@ -123,10 +123,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = mediaRestartSong(m)
 
 		case ",":
-			m = mediaSeekForward(m)
+			m = mediaSeekRewind(m)
 
 		case ";":
-			m = mediaSeekRewind(m)
+			m = mediaSeekForward(m)
 
 		case "S":
 			m = mediaShuffle(m)
@@ -708,7 +708,7 @@ func mediaRestartSong(m model) model {
 
 func mediaSeekForward(m model) model {
 	if m.focus != focusSearch {
-		player.Back10Seconds()
+		player.Forward10Seconds()
 	}
 
 	return m
@@ -716,7 +716,7 @@ func mediaSeekForward(m model) model {
 
 func mediaSeekRewind(m model) model {
 	if m.focus != focusSearch {
-		player.Forward10Seconds()
+		player.Back10Seconds()
 	}
 
 	return m
